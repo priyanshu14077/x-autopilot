@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { xOAuthConfig } from "./env";
 import { AppError } from "./errors";
-import { getSession, type Session, type XTokens } from "./session";
+import { destroySession, getSession, type Session, type XTokens } from "./session";
 
 // X API v2 + OAuth 2.0 (authorization code + PKCE, confidential client).
 const AUTHORIZE_URL = "https://x.com/i/oauth2/authorize";
@@ -178,4 +178,17 @@ export async function publishPost(text: string) {
     throw new AppError(502, "X had a server error; the post may or may not have been published. Check your profile before retrying.");
   }
   throw new AppError(502, "X rejected the post.");
+}
+
+/** Revokes both tokens at X (best effort) and clears the local session. */
+export async function disconnectX() {
+  const current = await getSession();
+  if (current) {
+    const { accessToken, refreshToken } = current.session.tokens;
+    await Promise.all([
+      revokeToken(accessToken, "access_token"),
+      refreshToken ? revokeToken(refreshToken, "refresh_token") : undefined,
+    ]);
+  }
+  await destroySession();
 }
